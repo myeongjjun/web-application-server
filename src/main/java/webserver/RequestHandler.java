@@ -2,6 +2,8 @@ package webserver;
 
 import java.io.*;
 import java.net.Socket;
+import java.net.URL;
+import java.nio.file.Files;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -26,14 +28,24 @@ public class RequestHandler extends Thread {
             String filePath = getFilePath(in);
             log.info("filePath => {}", filePath);
 
+            byte[] body = "Hello World".getBytes();
+            body = getBody(filePath, body);
 
             DataOutputStream dos = new DataOutputStream(out);
-            byte[] body = "Hello World".getBytes();
             response200Header(dos, body.length);
             responseBody(dos, body);
         } catch (IOException e) {
             log.error(e.getMessage());
         }
+    }
+
+    private byte[] getBody(String filePath, byte[] body) throws IOException {
+        File f = new File("webapp/" + filePath);
+        if (f.isFile()) {
+            log.info(f.getName());
+            body = Files.readAllBytes(f.toPath());
+        }
+        return body;
     }
 
     private String getFilePath(InputStream in) throws IOException {
@@ -52,16 +64,8 @@ public class RequestHandler extends Thread {
     }
 
     private String extractPath(String line) {
-        String[] splitLine = line.split(": |\n");
-        if (splitLine[0].equals("Referer")) {
-            return parseUrlPath(splitLine[1]);
-        }
-        return "";
-    }
-
-    private String parseUrlPath(String url) {
-        Pattern URL_PATH = Pattern.compile("http:\\/\\/.+:[\\d]+(\\/.*)");
-        Matcher matcher = URL_PATH.matcher(url);
+        Pattern URL_PATH = Pattern.compile("GET ([\\w\\.\\/]+) HTTP/1.1");
+        Matcher matcher = URL_PATH.matcher(line);
         if (matcher.find()) {
             return matcher.group(1);
         }
