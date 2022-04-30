@@ -13,6 +13,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import util.HttpRequestUtils;
 
+import static webserver.HttpMethodType.*;
+
 public class RequestHandler extends Thread {
     private static final Logger log = LoggerFactory.getLogger(RequestHandler.class);
 
@@ -28,18 +30,7 @@ public class RequestHandler extends Thread {
 
         try (InputStream in = connection.getInputStream(); OutputStream out = connection.getOutputStream()) {
             // TODO 사용자 요청에 대한 처리는 이 곳에 구현하면 된다.
-            String url = getUrl(in);
-            log.info("url => {}", url);
-
-            int index = url.indexOf("?");
-            String requestPath = url.substring(0, index);
-            String params = url.substring(index + 1);
-            Map<String, String> paramsMap = HttpRequestUtils.parseQueryString(params);
-
-            requestMapping(requestPath, paramsMap);
-
-            byte[] body = "Hello World".getBytes();
-            body = getBody(url, body);
+            byte[] body = getResponse(in);
 
             DataOutputStream dos = new DataOutputStream(out);
             response200Header(dos, body.length);
@@ -47,6 +38,49 @@ public class RequestHandler extends Thread {
         } catch (IOException e) {
             log.error(e.getMessage());
         }
+    }
+
+    private byte[] getResponse(InputStream in) throws IOException {
+        BufferedReader br = new BufferedReader(new InputStreamReader(in));
+        String header = br.readLine();
+        br.readLine(); // 공백
+        String body = br.readLine();
+
+        HttpMethodType methodType = getHttpMethodType(header);
+        String url = getUrl(header);
+        log.info("url => {}", url);
+
+        switch (methodType) {
+            case GET:
+                requestGet(url);
+                return getBody(url);
+            case POST:
+//                requestPost(url);
+                break;
+        }
+        return "Hello World".getBytes();
+    }
+
+    private void requestGet(String url) {
+        if (url.contains("?")) {
+            int index = url.indexOf("?");
+            String requestPath = url.substring(0, index);
+            String params = url.substring(index + 1);
+            Map<String, String> paramsMap = HttpRequestUtils.parseQueryString(params);
+
+            requestMapping(requestPath, paramsMap);
+        }
+    }
+
+    private HttpMethodType getHttpMethodType(String header) {
+        Pattern URL_PATH = Pattern.compile("(GET|POST|DELETE|PUT) .+ HTTP/1.1");
+        Matcher matcher = URL_PATH.matcher(header);
+        if (matcher.find()) {
+            String s = matcher.group(1);
+            return HttpMethodType.valueOf(s);
+        }
+
+        return null;
     }
 
     private void requestMapping(String requestPath, Map<String, String> paramsMap) {
@@ -64,8 +98,9 @@ public class RequestHandler extends Thread {
         DataBase.addUser(user);
     }
 
-    private byte[] getBody(String filePath, byte[] body) throws IOException {
-        File f = new File("webapp/" + filePath);
+    private byte[] getBody(String url) throws IOException {
+        byte[] body = "".getBytes();
+        File f = new File("webapp/" + url);
         if (f.isFile()) {
             log.info(f.getName());
             body = Files.readAllBytes(f.toPath());
@@ -73,23 +108,14 @@ public class RequestHandler extends Thread {
         return body;
     }
 
-    private String getUrl(InputStream in) throws IOException {
+    private String getUrl(String header) {
         String path = "";
-        InputStreamReader reader = new InputStreamReader(in);
-        BufferedReader br = new BufferedReader(reader);
-        String line = br.readLine();
-        if (line == null) {
-            return "";
-        }
-        path = extractPath(line);
-//        while (!"".equals(line) && filePath.equals("")) {
-//            line = br.readLine();
-//        }
+        path = extractPath(header);
         return path;
     }
 
     private String extractPath(String line) {
-        Pattern URL_PATH = Pattern.compile("GET ([\\w\\.\\/]+) HTTP/1.1");
+        Pattern URL_PATH = Pattern.compile("(?:GET|POST|DELETE) (.+) HTTP/1.1");
         Matcher matcher = URL_PATH.matcher(line);
         if (matcher.find()) {
             return matcher.group(1);
