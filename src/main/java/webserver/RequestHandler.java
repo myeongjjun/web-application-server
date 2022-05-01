@@ -12,6 +12,7 @@ import model.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import util.HttpRequestUtils;
+import util.IOUtils;
 
 import static webserver.HttpMethodType.*;
 
@@ -30,6 +31,7 @@ public class RequestHandler extends Thread {
 
         try (InputStream in = connection.getInputStream(); OutputStream out = connection.getOutputStream()) {
             // TODO 사용자 요청에 대한 처리는 이 곳에 구현하면 된다.
+//            printRequest(in);
             byte[] body = getResponse(in);
 
             DataOutputStream dos = new DataOutputStream(out);
@@ -40,11 +42,21 @@ public class RequestHandler extends Thread {
         }
     }
 
+    private void printRequest(InputStream in) throws IOException {
+        BufferedReader br = new BufferedReader(new InputStreamReader(in));
+        String line = br.readLine();
+        while (line != null || !line.equals("")) {
+            log.debug(line);
+            line = br.readLine();
+        }
+    }
+
     private byte[] getResponse(InputStream in) throws IOException {
         BufferedReader br = new BufferedReader(new InputStreamReader(in));
         String header = br.readLine();
-        br.readLine(); // 공백
-        String body = br.readLine();
+
+        log.debug(header);
+         // 공백
 
         HttpMethodType methodType = getHttpMethodType(header);
         String url = getUrl(header);
@@ -55,10 +67,43 @@ public class RequestHandler extends Thread {
                 requestGet(url);
                 return getBody(url);
             case POST:
-//                requestPost(url);
-                break;
+                int contentLength = parseContentLength(br);
+                String body = parsePostBody(br, contentLength);
+                requestPost(url, body);
+                return getBody(url);
         }
         return "Hello World".getBytes();
+    }
+
+    private String parsePostBody(BufferedReader br, int contentLength) throws IOException {
+        // POST body 까지 readLine
+        String body = br.readLine();
+        while (!"".equals(body)) {
+            log.debug(body);
+            body = br.readLine();
+        }
+        // POST body 까지 readLine
+        return IOUtils.readData(br, contentLength);
+    }
+
+
+    private int parseContentLength(BufferedReader br) throws IOException {
+        String line = br.readLine();
+        while (!"".equals(line)) {
+            log.debug(line);
+            int index = line.indexOf(":");
+            if (line.substring(0, index).equals("Content-Length")) {
+                return Integer.parseInt(line.substring(index + 2));
+            }
+            line = br.readLine();
+        }
+        return 0;
+    }
+
+    private void requestPost(String url, String body) {
+        Map<String, String> paramsMap = HttpRequestUtils.parseQueryString(body);
+        // POST 요청은 url이 requestPath
+        requestMapping(url, paramsMap);
     }
 
     private void requestGet(String url) {
@@ -73,6 +118,9 @@ public class RequestHandler extends Thread {
     }
 
     private HttpMethodType getHttpMethodType(String header) {
+        if (header == null) {
+            return NONE;
+        }
         Pattern URL_PATH = Pattern.compile("(GET|POST|DELETE|PUT) .+ HTTP/1.1");
         Matcher matcher = URL_PATH.matcher(header);
         if (matcher.find()) {
@@ -80,7 +128,7 @@ public class RequestHandler extends Thread {
             return HttpMethodType.valueOf(s);
         }
 
-        return null;
+        return NONE;
     }
 
     private void requestMapping(String requestPath, Map<String, String> paramsMap) {
@@ -115,6 +163,9 @@ public class RequestHandler extends Thread {
     }
 
     private String extractPath(String line) {
+        if (line == null) {
+            return "";
+        }
         Pattern URL_PATH = Pattern.compile("(?:GET|POST|DELETE) (.+) HTTP/1.1");
         Matcher matcher = URL_PATH.matcher(line);
         if (matcher.find()) {
