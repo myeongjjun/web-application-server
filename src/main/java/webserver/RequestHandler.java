@@ -11,7 +11,6 @@ import db.DataBase;
 import model.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import util.HttpRequestUtils;
 import util.IOUtils;
 
 import static webserver.HttpMethodType.*;
@@ -38,17 +37,7 @@ public class RequestHandler extends Thread {
         }
     }
 
-    private void printRequest(InputStream in) throws IOException {
-        BufferedReader br = new BufferedReader(new InputStreamReader(in));
-        String line = br.readLine();
-        while (line != null || !line.equals("")) {
-            log.debug(line);
-            line = br.readLine();
-        }
-    }
-
     private void response(InputStream in, OutputStream out) throws IOException {
-        byte[] responseBody;
         BufferedReader br = new BufferedReader(new InputStreamReader(in));
         String header = br.readLine();
 
@@ -56,39 +45,30 @@ public class RequestHandler extends Thread {
          // 공백
 
         HttpMethodType methodType = getHttpMethodType(header);
-        String path = getPath(header);
+        String url = getUrl(header);
         String host = parseHost(br);
-        log.info("path => {}", path);
+        log.info("path => {}", url);
         log.info("host => {}", host);
 
         switch (methodType) {
             case GET:
-                requestGet(path);
-                responseBody = getBody(path);
+                RequestData requestGet = RequestData.requestGet(url, host);
+                requestMapping(requestGet, out);
                 break;
             case POST:
                 int contentLength = parseContentLength(br);
                 String body = parsePostBody(br, contentLength);
-                requestPost(path, body);
-                responseBody = getBody(path);
+                RequestData requestPost = RequestData.requestPost(url, host, contentLength, body);
+                requestMapping(requestPost, out);
                 break;
             default:
-                responseBody = "Hello World".getBytes();
+//                responseBody = "Hello World".getBytes();
                 break;
         }
 
-        DataOutputStream dos = new DataOutputStream(out);
-        responseMapping(dos, host, path, responseBody);
-        responseBody(dos, responseBody);
+
     }
 
-    private void responseMapping(DataOutputStream dos, String host, String path, byte[] body) {
-        if (path.equals("/user/create")) {
-            response302Header(dos, host, "/index.html");
-        } else {
-            response200Header(dos, body.length);
-        }
-    }
 
     private String parsePostBody(BufferedReader br, int contentLength) throws IOException {
         // POST body 까지 readLine
@@ -128,23 +108,6 @@ public class RequestHandler extends Thread {
         return 0;
     }
 
-    private void requestPost(String url, String body) {
-        Map<String, String> paramsMap = HttpRequestUtils.parseQueryString(body);
-        // POST 요청은 url이 requestPath
-        requestMapping(url, paramsMap);
-    }
-
-    private void requestGet(String url) {
-        if (url.contains("?")) {
-            int index = url.indexOf("?");
-            String requestPath = url.substring(0, index);
-            String params = url.substring(index + 1);
-            Map<String, String> paramsMap = HttpRequestUtils.parseQueryString(params);
-
-            requestMapping(requestPath, paramsMap);
-        }
-    }
-
     private HttpMethodType getHttpMethodType(String header) {
         if (header == null) {
             return NONE;
@@ -159,10 +122,26 @@ public class RequestHandler extends Thread {
         return NONE;
     }
 
-    private void requestMapping(String requestPath, Map<String, String> paramsMap) {
-        if (requestPath.equals("/user/create")) {
+    private void requestMapping(RequestData req, OutputStream out) throws IOException {
+        String path = req.getPath();
+        Map<String, String> paramsMap = req.getParams();
+        String host = req.getHost();
+        DataOutputStream dos = new DataOutputStream(out);
+        if (path.equals("/user/create")) {
             createUser(paramsMap);
+            byte[] body = getBody(path);
+            response302Header(dos, host, "/index.html");
+            responseBody(dos, body);
+        } else if (path.equals("/user/login")) {
+            byte[] body = getBody(path);
+            response200Header(dos, body.length);
+            responseBody(dos, body);
+        } else {
+            byte[] body = getBody(path);
+            response200Header(dos, body.length);
+            responseBody(dos, body);
         }
+
     }
 
     private void createUser(Map<String, String> paramsMap) {
@@ -184,7 +163,7 @@ public class RequestHandler extends Thread {
         return body;
     }
 
-    private String getPath(String header) {
+    private String getUrl(String header) {
         String path = "";
         path = extractPath(header);
         return path;
