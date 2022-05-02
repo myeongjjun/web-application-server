@@ -29,6 +29,13 @@ public class User {
         return email;
     }
 
+    public Boolean validate(String validUserId, String validPassword) {
+        if (userId.equals(validUserId) && password.equals(validPassword)) {
+            return true;
+        }
+        return false;
+    }
+
     @Override
     public String toString() {
         return "User [userId=" + userId + ", password=" + password + ", name=" + name + ", email=" + email + "]";

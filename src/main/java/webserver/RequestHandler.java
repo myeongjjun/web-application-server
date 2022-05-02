@@ -56,11 +56,13 @@ public class RequestHandler extends Thread {
             case GET:
                 RequestData requestGet = RequestData.requestGet(url, host);
                 requestMapping(requestGet, out);
+                requestGet.addCookie(headers);
                 break;
             case POST:
                 int contentLength = parseContentLength(headers);
                 String body = parsePostBody(br, contentLength);
                 RequestData requestPost = RequestData.requestPost(url, host, contentLength, body);
+                requestPost.addCookie(headers);
                 requestMapping(requestPost, out);
                 break;
             default:
@@ -97,6 +99,8 @@ public class RequestHandler extends Thread {
         return Integer.parseInt(headers.getOrDefault("Content-Length", "0"));
     }
 
+
+
     private HttpMethodType getHttpMethodType(String header) {
         if (header == null) {
             return NONE;
@@ -114,17 +118,23 @@ public class RequestHandler extends Thread {
     private void requestMapping(RequestData req, OutputStream out) throws IOException {
         String path = req.getPath();
         Map<String, String> paramsMap = req.getParams();
-        String host = req.getHost();
         DataOutputStream dos = new DataOutputStream(out);
+        ResponseData res = new ResponseData();
+        res.setHost(req.getHost());
         if (path.equals("/user/create")) {
             createUser(paramsMap);
             byte[] body = getBody(path);
-            response302Header(dos, host, "/index.html");
+            response302Header(dos, res, "/index.html");
             responseBody(dos, body);
         } else if (path.equals("/user/login")) {
-            login(paramsMap);
             byte[] body = getBody(path);
-            response200Header(dos, body.length);
+            if (login(paramsMap)) {
+                res.setCookie("logined=true");
+                response302Header(dos, res, "/index.html");
+            } else {
+                res.setCookie("logined=false");
+                response302Header(dos, res, "/user/login_failed.html");
+            }
             responseBody(dos, body);
         } else {
             byte[] body = getBody(path);
@@ -134,8 +144,12 @@ public class RequestHandler extends Thread {
 
     }
 
-    private void login(Map<String, String> paramsMap) {
-        
+    private Boolean login(Map<String, String> paramsMap) {
+        String userId = paramsMap.get("userId");
+        String password = paramsMap.get("password");
+        User findUser = DataBase.findUserById(userId);
+        if (findUser == null) return false;
+        return findUser.validate(userId, password);
     }
 
     private void createUser(Map<String, String> paramsMap) {
@@ -186,10 +200,12 @@ public class RequestHandler extends Thread {
         }
     }
 
-    private void response302Header(DataOutputStream dos, String host, String path) {
+    private void response302Header(DataOutputStream dos, ResponseData res, String redirectPath) {
         try {
             dos.writeBytes("HTTP/1.1 302 Found \r\n");
-            dos.writeBytes("Location: http://" + host + path +"\r\n");
+            dos.writeBytes("Location: http://" + res.getHost() + redirectPath +"\r\n");
+            if (res.getCookie() != null)
+                dos.writeBytes("Set-Cookie: " + res.getCookie() +"\r\n");
             dos.writeBytes("\r\n");
         } catch (IOException e) {
             log.error(e.getMessage());

@@ -13,6 +13,7 @@ public class RequestData {
     String url;
     String host;
     String path;
+    String cookie;
     Map<String, String> params;
     int contentLength;
     String body;
@@ -43,6 +44,13 @@ public class RequestData {
         return new RequestData(POST, url, host, url, HttpRequestUtils.parseQueryString(body), contentLength, body);
     }
 
+    public String addCookie(Map<String, String> headers) {
+        return headers.getOrDefault("Cookie", "");
+    }
+
+    public String getCookie() {
+        return cookie;
+    }
 
     public int getContentLength() {
         return contentLength;
