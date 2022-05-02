@@ -3,6 +3,7 @@ package webserver;
 import java.io.*;
 import java.net.Socket;
 import java.nio.file.Files;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -46,7 +47,8 @@ public class RequestHandler extends Thread {
 
         HttpMethodType methodType = getHttpMethodType(header);
         String url = getUrl(header);
-        String host = parseHost(br);
+        Map<String, String> headers = parseHeader(br);
+        String host = parseHost(headers);
         log.info("path => {}", url);
         log.info("host => {}", host);
 
@@ -56,7 +58,7 @@ public class RequestHandler extends Thread {
                 requestMapping(requestGet, out);
                 break;
             case POST:
-                int contentLength = parseContentLength(br);
+                int contentLength = parseContentLength(headers);
                 String body = parsePostBody(br, contentLength);
                 RequestData requestPost = RequestData.requestPost(url, host, contentLength, body);
                 requestMapping(requestPost, out);
@@ -72,40 +74,27 @@ public class RequestHandler extends Thread {
 
     private String parsePostBody(BufferedReader br, int contentLength) throws IOException {
         // POST body 까지 readLine
-        String body = br.readLine();
-        while (!"".equals(body)) {
-            log.debug(body);
-            body = br.readLine();
-        }
-        // POST body 까지 readLine
         return IOUtils.readData(br, contentLength);
     }
 
-    private String parseHost(BufferedReader br) throws IOException {
+    private Map<String, String> parseHeader(BufferedReader br) throws IOException {
+        Map<String, String> headers = new HashMap<>();
         String line = br.readLine();
-        while (!"".equals(line)) {
+        while (!"".equals(line) && line != null ) {
             log.debug(line);
             int index = line.indexOf(":");
-            if (line.substring(0, index).equals("Host")) {
-                return line.substring(index + 2);
-            }
+            headers.put(line.substring(0, index), line.substring(index + 2));
             line = br.readLine();
         }
-        return "";
+        return headers;
     }
 
+    private String parseHost(Map<String, String> headers) {
+        return headers.getOrDefault("Host", "");
+    }
 
-    private int parseContentLength(BufferedReader br) throws IOException {
-        String line = br.readLine();
-        while (!"".equals(line)) {
-            log.debug(line);
-            int index = line.indexOf(":");
-            if (line.substring(0, index).equals("Content-Length")) {
-                return Integer.parseInt(line.substring(index + 2));
-            }
-            line = br.readLine();
-        }
-        return 0;
+    private int parseContentLength(Map<String, String> headers) {
+        return Integer.parseInt(headers.getOrDefault("Content-Length", "0"));
     }
 
     private HttpMethodType getHttpMethodType(String header) {
@@ -133,6 +122,7 @@ public class RequestHandler extends Thread {
             response302Header(dos, host, "/index.html");
             responseBody(dos, body);
         } else if (path.equals("/user/login")) {
+            login(paramsMap);
             byte[] body = getBody(path);
             response200Header(dos, body.length);
             responseBody(dos, body);
@@ -142,6 +132,10 @@ public class RequestHandler extends Thread {
             responseBody(dos, body);
         }
 
+    }
+
+    private void login(Map<String, String> paramsMap) {
+        
     }
 
     private void createUser(Map<String, String> paramsMap) {

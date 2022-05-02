@@ -14,10 +14,13 @@ public class RequestDataTest {
     public void requestGetTest() {
         String url = "/user/create";
         String host = "localhost:8080";
-        RequestData req = new RequestData(url, host, 0, "");
+        String body = "test=aaa&name=myeong";
+        RequestData req = RequestData.requestPost(url, host, 0, body);
 
         Map<String, String> params = req.getParams();
         assertThat(req.getPath(), is(url));
+        assertThat(params.get("test"), is("aaa"));
+        assertThat(params.get("name"), is("myeong"));
     }
 
 
@@ -25,7 +28,7 @@ public class RequestDataTest {
     public void requestGetParamsTest() {
         String url = "/user/create?test=aaa&name=myeong";
         String host = "localhost:8080";
-        RequestData req = new RequestData(url, host, 0, "");
+        RequestData req = RequestData.requestGet(url, host);
 
         Map<String, String> params = req.getParams();
         assertThat(req.getPath(), is("/user/create"));
