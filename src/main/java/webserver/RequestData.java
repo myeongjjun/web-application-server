@@ -15,6 +15,7 @@ public class RequestData {
     String path;
     String cookie;
     Map<String, String> params;
+    Map<String, String> cookies;
     int contentLength;
     String body;
 
@@ -44,8 +45,10 @@ public class RequestData {
         return new RequestData(POST, url, host, url, HttpRequestUtils.parseQueryString(body), contentLength, body);
     }
 
-    public String addCookie(Map<String, String> headers) {
-        return headers.getOrDefault("Cookie", "");
+    public void addCookie(Map<String, String> headers) {
+        String cookie = headers.getOrDefault("Cookie", "");
+        this.cookie = cookie;
+        this.cookies = HttpRequestUtils.parseCookies(cookie);
     }
 
     public String getCookie() {
@@ -78,5 +81,9 @@ public class RequestData {
 
     public Map<String, String> getParams() {
         return params;
+    }
+
+    public Map<String, String> getCookies() {
+        return cookies;
     }
 }
